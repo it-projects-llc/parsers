@@ -7,7 +7,43 @@
 
 <!-- /!\ do not modify above this line -->
 
-#
+# Booking.com Hotel Scraper (Italy - Sardinia & Calabria)
+
+This Python script scrapes hotel data from [Booking.com](https://www.booking.com) using their internal GraphQL API. It collects hotels from the Sardinia and Calabria regions and saves them in a `result.csv` file.
+
+## Features
+
+- Scrapes hotel `id`, `name`, `city`, and `address`
+- Adds constant fields: `state_id=base.it`, `is_hotel=1`, `is_company=1`
+- Handles pagination
+- Avoids duplicates
+
+## Requirements
+
+- Python 3.8+
+- Install dependencies:
+
+```bash
+pip install requests
+```
+## Usage
+
+ - Clone the repository
+ - Set maximum number of hotels to scrape in main.py, line 34:
+		maximum_hotels = 1000  # Set your desired hotel count limit
+ - Run the script:
+	python3 main.py
+ - Output will be saved as result.csv.
+
+## Output Format
+
+id,name,city,address,state_id,is_hotel,is_company
+123456,Hotel Roma,Rome,Via Nazionale 1,base.it,1,1
+
+## Notes
+
+This script uses internal (unofficial) Booking.com GraphQL API and may stop working if the site structure changes.
+Use responsibly to avoid temporary IP bans. Includes a delay between requests.
 
 
 
