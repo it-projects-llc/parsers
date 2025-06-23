@@ -2,12 +2,16 @@ import argparse
 import json
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 from bs4 import BeautifulSoup
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+ROME = ZoneInfo("Europe/Rome")
+UTC = ZoneInfo("UTC")
 
 
 def build_url(dep, arr, date_from):
@@ -17,7 +21,6 @@ def build_url(dep, arr, date_from):
     )
 
 
-# HTTP GET / return the page content
 def fetch_html(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -29,8 +32,7 @@ def fetch_html(url):
     return response.text
 
 
-# Parse HTML / extract flights
-def parse_flights(html, date_str, dep, arr):
+def parse_flights(html, date_obj, dep, arr):
     soup = BeautifulSoup(html, "html.parser")
     rows = soup.select("table.gs-table tbody tr")
     flights = []
@@ -44,13 +46,12 @@ def parse_flights(html, date_str, dep, arr):
         departure_info = cols[2].get_text(separator=" ", strip=True)
 
         dep_time_str = departure_info.split()[-1]
-        try:
-            # UTC datetime
-            dt_local = datetime.strptime(f"{date_str} {dep_time_str}", "%d/%m/%Y %H:%M")
-            utc_dt = dt_local.strftime("%Y-%m-%dT%H:%M:00Z")
-        except Exception as e:
-            logger.warning(f"Datetime error: {e}")
-            continue
+
+        # Convert local time to UTC
+        dt_str = f"{date_obj.strftime('%d/%m/%Y')} {dep_time_str}"
+        dt_local = datetime.strptime(dt_str, "%d/%m/%Y %H:%M").replace(tzinfo=ROME)
+        dt_utc = dt_local.astimezone(UTC)
+        utc_dt = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         flights.append(
             {
@@ -64,19 +65,32 @@ def parse_flights(html, date_str, dep, arr):
     return flights
 
 
-# Command line arguments / run parser / save results
-parser = argparse.ArgumentParser()
-parser.add_argument("--dep", required=True)
-parser.add_argument("--arr", required=True)
-parser.add_argument("--date-from", required=True)
-parser.add_argument("--output", required=True)
-args = parser.parse_args()
+def parse_date(date_str):
+    try:
+        return datetime.strptime(date_str, "%d/%m/%Y").date()
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(
+            "Invalid date format. Use DD/MM/YYYY (e.g., 18/06/2025)."
+        ) from err
 
-url = build_url(args.dep, args.arr, args.date_from)
-html = fetch_html(url)
-flights = parse_flights(html, args.date_from, args.dep, args.arr)
 
-with open(args.output, "w", encoding="utf-8") as f:
-    json.dump(flights, f, ensure_ascii=False, indent=2)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Parse flights from geasar.it")
+    parser.add_argument(
+        "--dep", required=True, help="Departure airport code (e.g. OLB)"
+    )
+    parser.add_argument("--arr", required=True, help="Arrival airport code (e.g. FCO)")
+    parser.add_argument(
+        "--date-from", required=True, type=parse_date, help="Date (DD/MM/YYYY)"
+    )
+    parser.add_argument("--output", required=True, help="Path to output JSON file")
+    args = parser.parse_args()
 
-logger.info(f"Saved {len(flights)} flights in {args.output}")
+    url = build_url(args.dep, args.arr, args.date_from.strftime("%d/%m/%Y"))
+    html = fetch_html(url)
+    flights = parse_flights(html, args.date_from, args.dep, args.arr)
+
+    with open(args.output, "w", encoding="utf-8") as f:
+        json.dump(flights, f, ensure_ascii=False, indent=2)
+
+    logger.info(f"Saved {len(flights)} flights to {args.output}")
